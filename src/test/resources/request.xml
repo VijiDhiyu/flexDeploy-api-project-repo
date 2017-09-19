@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FDRequestMessage>  
+  <qualifiedProjectName>/FlexDeploy/Viji/Mule/SampleAppln/SampleProject</qualifiedProjectName>
+  <PropertyValue>Test by viji to update project scope property value</PropertyValue>
+  <uriResourceName>buildProject</uriResourceName>
+</FDRequestMessage>

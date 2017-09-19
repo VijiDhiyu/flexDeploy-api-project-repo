@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:context="http://www.springframework.org/schema/context" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <http:request-config name="HTTP_Request_Configuration" host="fdwlt05.flexagon" port="7003" basePath="/flexdeploy/rest" doc:name="HTTP Request Configuration"/>
+    <spring:beans>
+        <spring:bean id="ListableObjectStore" name="Bean" class="org.mule.util.store.SimpleMemoryObjectStore"/>
+    </spring:beans>
+    <context:property-placeholder location="fd-auth.properties"/>
+    <flow name="mainFlow">
+        <http:listener config-ref="Domain_HTTP_Listener_Configuration" path="/flexDeploy" allowedMethods="POST" doc:name="HTTP">
+            <http:error-response-builder>
+                <http:header headerName="Content-Type" value="application/xml"/>
+            </http:error-response-builder>
+        </http:listener>
+        <set-variable variableName="ProjectLoc" value="#[xpath3('/FDRequestMessage/qualifiedProjectName')]" doc:name="Extract &amp; set ProjectLoc variable"/>
+        <set-variable variableName="PropertyVal" value="#[xpath3('/FDRequestMessage/PropertyValue')]" doc:name="Extract &amp; set Property Value variable"/>
+        <set-session-variable variableName="uriResource" value="#[xpath3('/FDRequestMessage/ResourceMethodName')]" doc:name="Extract &amp; set Sess Variable uriResource"/>
+       
+        <logger message="#[flowVars.projectLoc] and #[flowVars.PropertyVal]  and resource is #[xpath3('/FDRequestMessage/ResourceMethodName')]" level="INFO" doc:name="Logger"/>
+
+                 
+       <set-variable variableName="EnvCode" value="DEV01" doc:name="set Environment Code"/>
+        <!-- set-session-variable variableName="ProjFiles" value="#[xpath3('/FDRequestMessage/ProjectFiles')]" doc:name="Session Variable - ProjFiles"/-->
+      
+        <flow-ref name="buildOrDeployOperationFlow" doc:name="buildOrDeployOperationFlow"/>
+
+        <set-payload value="FlexDeploy build/deploy operation completed successfully!" doc:name="Set Payload - Complete"/>
+    </flow>
+
+     <sub-flow name="updateProjectPropertyFlow">
+        <set-payload value="{    &quot;authentication&quot;:     {        &quot;userId&quot;: &quot;${auth.username}&quot;,        &quot;password&quot;: &quot;${auth.password}&quot;     },    &quot;properties&quot;: [     {        &quot;qualifiedProjectName&quot;: &quot;#[flowVars.ProjectLoc]&quot;,        &quot;code&quot;: &quot;MULE_PROPERTY_LASTUPDATE&quot;,        &quot;value&quot;: &quot;#[flowVars.PropertyVal]&quot;,        &quot;isExpression&quot;: &quot;false&quot;     }] }" doc:name="construct Payload UpdateProperties"/>
+        <http:request config-ref="HTTP_Request_Configuration" path="/properties/updateProperties" method="POST" doc:name="HTTP - Update Property">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <set-payload value="#[message.payloadAs(java.lang.String)]" doc:name="Set Payload"/>
+    </sub-flow>
+    <sub-flow name="API-invocationFlow">
+        <http:request config-ref="HTTP_Request_Configuration" path="/workflow/#[sessionVars.uriResource]" method="POST" doc:name="HTTP - Request">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <set-variable variableName="WorkflowReqId" value="#[message.payloadAs(java.lang.String)]" mimeType="application/json" doc:name="set Workflow Request Id"/>
+        <flow-ref name="getWFStatus" doc:name="getWFStatus"/>
+    </sub-flow>
+    <flow name="buildOrDeployOperationFlow">
+        <choice doc:name="Choice" >
+            <when expression="#[sessionVars.uriResource == 'buildProject']">
+                <set-payload value="{    &quot;authentication&quot;:     {        &quot;userId&quot;: &quot;${auth.username}&quot;,        &quot;password&quot;: &quot;${auth.password}&quot;     },    &quot;environmentCode&quot;: &quot;#[flowVars.EnvCode]&quot;,    &quot;forceBuild&quot;: &quot;true&quot;,    &quot;qualifiedProjectName&quot;: &quot;#[flowVars.ProjectLoc]&quot;,    &quot;streamName&quot;: &quot;trunk&quot;,    &quot;inputs&quot;: [     {        &quot;code&quot;: &quot;COMMENT&quot;,        &quot;value&quot;: &quot;BBLD&quot;     }],  &quot;flexFields&quot;:[  {   &quot;code&quot;:&quot;buildff&quot;, &quot;value&quot;:&quot;viji&quot;  }] }" doc:name="construct Payload - Build"/>
+                <flow-ref name="API-invocationFlow" doc:name="API-invocationFlow"/>
+            </when>
+            <when expression="#[sessionVars.uriResource == 'deployProject']">
+                <set-payload value="{    &quot;authentication&quot;:     {        &quot;userId&quot;: &quot;${auth.username}&quot;,        &quot;password&quot;: &quot;${auth.password}&quot;     },    &quot;environmentCode&quot;: &quot;#[flowVars.EnvCode]&quot;,    &quot;instanceCodes&quot;:[&quot;TEST01&quot;],    &quot;forceDeploy&quot;: &quot;true&quot;,    &quot;qualifiedProjectName&quot;: &quot;#[flowVars.ProjectLoc]&quot;,    &quot;streamName&quot;: &quot;trunk&quot;,    &quot;inputs&quot;: [     {        &quot;code&quot;: &quot;COMMENT&quot;,        &quot;value&quot;: &quot;DDPL&quot;     }],  &quot;flexFields&quot;:[  {   &quot;code&quot;:&quot;TEST_DEPLOY_FF&quot;, &quot;value&quot;:&quot;11&quot;  }] }" doc:name="construct Payload - Deploy"/>
+                <flow-ref name="API-invocationFlow" doc:name="API-invocationFlow"/>
+            </when>
+            <when expression="#[sessionVars.uriResource == 'updateProject']">
+                <flow-ref name="updateProjectPropertyFlow" doc:name="updateProjectPropertyFlow"/>
+            </when>
+            <when expression="#[sessionVars.uriResource == 'deployMany']">
+                <flow-ref name="deployMany" doc:name="deployMany"/>
+            </when>
+            <when expression="#[sessionVars.uriResource == 'buildPartial']">
+                <set-payload value="{
+   &quot;authentication&quot;:
+    {
+      &quot;userId&quot;: &quot;${auth.username}&quot;,        &quot;password&quot;: &quot;${auth.password}&quot;  
+    },
+   &quot;environmentCode&quot;:&quot;DEVELOPMENT&quot;,
+   &quot;forceBuild&quot;: &quot;true&quot;,
+   &quot;streamName&quot;:&quot;trunk&quot;,
+   &quot;qualifiedProjectName&quot;:&quot;/FlexDeploy/Viji/Mule/VijiPartial/XXHR_Partial13&quot;,
+
+	&quot;projectFiles&quot;:[
+{
+   &quot;path&quot;: &quot;/java/flx/oracle/apps/xxhr/emp/lov/server/SocietyNameLovAM.xml&quot;
+}]
+}" doc:name="Set Payload for Partial build"/>
+                <set-session-variable variableName="uriResource" value="buildProject" doc:name="Reset Actual UriResourceName "/>
+                <flow-ref name="API-invocationFlow" doc:name="API-invocationFlow"/>
+            </when>
+            <otherwise>
+                <logger message="Irrelevant URI resource specified, Abort operation" level="INFO" doc:name="Logger"/>
+            </otherwise>
+
+        </choice>
+
+    </flow>
+    <flow name="deployMany">
+        <scatter-gather doc:name="Scatter-Gather">
+            <processor-chain>
+                <set-payload value="{    &quot;authentication&quot;:     {        &quot;userId&quot;: &quot;${auth.username}&quot;,        &quot;password&quot;: &quot;${auth.password}&quot;     },    &quot;environmentCode&quot;: &quot;#[flowVars.EnvCode]&quot;,    &quot;instanceCodes&quot;:[&quot;TEST01&quot;],    &quot;forceDeploy&quot;: &quot;true&quot;,    &quot;qualifiedProjectName&quot;: &quot;#[flowVars.ProjectLoc]&quot;,    &quot;streamName&quot;: &quot;trunk&quot;,    &quot;inputs&quot;: [     {        &quot;code&quot;: &quot;COMMENT&quot;,        &quot;value&quot;: &quot;DDPL&quot;     }],  &quot;flexFields&quot;:[  {   &quot;code&quot;:&quot;TEST_DEPLOY_FF&quot;, &quot;value&quot;:&quot;11&quot;  }] }" doc:name="construct Payload - Deploy Instance1 of DEV01"/>
+                <set-session-variable variableName="uriResource" value="deployProject" doc:name="Reset Actual UriResourceName "/>
+                <flow-ref name="API-invocationFlow" doc:name="API-invocationFlow"/>
+            </processor-chain>
+             <processor-chain>
+                <set-payload value="{    &quot;authentication&quot;:     {        &quot;userId&quot;: &quot;${auth.username}&quot;,        &quot;password&quot;: &quot;${auth.password}&quot;     },    &quot;environmentCode&quot;: &quot;#[flowVars.EnvCode]&quot;,    &quot;instanceCodes&quot;:[&quot;TEST03&quot;],    &quot;forceDeploy&quot;: &quot;true&quot;,    &quot;qualifiedProjectName&quot;: &quot;#[flowVars.ProjectLoc]&quot;,    &quot;streamName&quot;: &quot;trunk&quot;,    &quot;inputs&quot;: [     {        &quot;code&quot;: &quot;COMMENT&quot;,        &quot;value&quot;: &quot;DDPL2&quot;     }],  &quot;flexFields&quot;:[  {   &quot;code&quot;:&quot;TEST_DEPLOY_FF&quot;, &quot;value&quot;:&quot;14&quot;  }] }" doc:name="construct Payload - Deploy  Instance2 of DEV01"/>
+                <set-session-variable variableName="uriResource" value="deployProject" doc:name="Reset Actual UriResourceName "/>
+                <flow-ref name="API-invocationFlow" doc:name="API-invocationFlow"/>
+                <!-- flow-ref name="API-invocationFlow" doc:name="API-invocationFlow"/ -->
+            </processor-chain> 
+        </scatter-gather>
+    </flow>
+    <flow name="getWFStatus">
+        <set-payload value="{     &quot;authentication&quot;:     {         &quot;userId&quot;: &quot;${auth.username}&quot;,         &quot;password&quot;: &quot;${auth.password}&quot;     },     &quot;workflowRequestId&quot;: #[flowVars.WorkflowReqId] }" doc:name="construct Payload - Get Workflow Status"/>
+        <http:request config-ref="HTTP_Request_Configuration" path="/workflow/getWorkflowRequestStatus" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+        <set-payload value="#[message.payloadAs(java.lang.String)]" doc:name="Set Payload"/>
+        <flow-ref name="triggerStatusCodeFlow" doc:name="triggerStatusCodeFlow"/>
+    </flow>
+
+    <flow name="triggerStatusCodeFlow">
+        <choice doc:name="Choice">
+            <when expression="#[payload contains 'PENDING_APPROVAL']">
+                <set-payload value="{     &quot;authentication&quot;:     {         &quot;userId&quot;: &quot;${auth.username}&quot;,         &quot;password&quot;: &quot;${auth.password}&quot;     },     &quot;workflowRequestId&quot;: #[flowVars.WorkflowReqId] }" doc:name="construct Payload - Approval"/>
+                <http:request config-ref="HTTP_Request_Configuration" path="/task/approveProject" method="POST" doc:name="HTTP - Approve Task">
+                    <http:request-builder>
+                        <http:header headerName="Content-Type" value="application/json"/>
+                    </http:request-builder>
+                </http:request>
+                <logger message="Task approved successfully for Request Id [#[flowVars.WorkflowReqId]]." level="INFO" doc:name="Logger - Task Approved"/>
+                <flow-ref name="getWFStatus" doc:name="getWFStatus"/>
+            </when>
+            <when expression="#[payload contains 'FAILED' or 'REJECTED' or 'ABORTED']">
+                <logger message="#[sessionVars.uriResource] workflow execution failed to Environment [#[flowVars.EnvCode]] for Request Id [#[flowVars.WorkflowReqId]]." level="INFO" doc:name="Logger - Execution Failure"/>
+                <scripting:transformer encoding="windows-1256" doc:name="Groovy - Throw Error" mimeType="application/json">
+                    <scripting:script engine="Groovy">
+						<![CDATA[throw new Exception("Workflow execution failed for request id: " + message.getInvocationProperty('WorkflowReqId') + "\n\n");]]>
+                    </scripting:script>
+                </scripting:transformer>
+            </when>
+            <when expression="#[payload contains 'COMPLETED']">
+                <logger message="#[sessionVars.uriResource] workflow execution Successful to Environment [#[flowVars.EnvCode]] for Request Id [#[flowVars.WorkflowReqId]]." level="INFO" doc:name="Logger - Execution Completed"/>
+            </when>
+            <otherwise>
+                <scripting:component doc:name="Groovy - Wait 10 Seconds">
+                    <scripting:script engine="Groovy"><![CDATA[sleep(10000);]]></scripting:script>
+                </scripting:component>
+
+                <flow-ref name="getWFStatus" doc:name="getWFStatus"/>
+
+            </otherwise>
+        </choice>
+    </flow>
+
+</mule>

@@ -1,0 +1,15 @@
+{
+   "authentication":
+    {
+       "userId":"vijik",
+       "password": "Dhiyaan14"
+    },
+   "environmentCode":"DEV01",
+   "forceBuild": "true",
+   "streamName":"trunk",
+   "qualifiedProjectName":"/FlexDeploy/Viji/Mule/SampleAppln/SampleProject",
+	"inputs": [
+	{
+ 	  "code":"COMMENT","value": "BBLD"
+	}]
+}
