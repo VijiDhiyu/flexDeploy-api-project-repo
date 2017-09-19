@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.mycompany</groupId>
 	<artifactId>flexdeploy-api-project</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT-VK</version>
     <packaging>mule</packaging>
 	<name>Mule flexdeploy-api-project Application</name>
 
