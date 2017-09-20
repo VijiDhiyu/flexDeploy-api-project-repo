@@ -33,7 +33,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
       
         <flow-ref name="buildOrDeployOperationFlow" doc:name="buildOrDeployOperationFlow"/>
 
-        <set-payload value="FlexDeploy build/deploy operation completed successfully!" doc:name="Set Payload - Complete"/>
+        <set-payload value="FlexDeploy build/deploy operation completed successfully." doc:name="Set Payload - Complete"/>
     </flow>
 
      <sub-flow name="updateProjectPropertyFlow">
